@@ -1,0 +1,29 @@
+{
+  "network": "bitcoin-testnet4",
+  "borrower": {
+    "name": "Alice",
+    "publicKey": "0279be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798",
+    "address": "tb1qw508d6qejxtdg4y5r3zarvary0c5xw7kxpjzsx"
+  },
+  "lender": {
+    "name": "Bob",
+    "publicKey": "02c6047f9441ed7d6d3045406e95c07cd85c778e4b8cef3ca7abac09b95c709ee5",
+    "address": "tb1qq6hag67dl53wl99vzg42z8eyzfz2xlkvvlryfj"
+  },
+  "terms": {
+    "fundingTimeoutBlocks": 6,
+    "loanTermBlocks": 10,
+    "canonicalHash": "e813da992343b74501b46d24815c11dccc7a9c226421cf3612852a516caebe3b",
+    "loanId": "loan_e813da992343b74501b46d24"
+  },
+  "pendingVault": {
+    "address": "tb1p0mxxmvmryn8jgm4swa3ryylpclas6w9cmyqy8fzq49pgs2ryzpwsfjd5c3",
+    "outputScriptHex": "51207ecc6db36324cf246eb077623213e1c7fb0d38b8d90043a440a942882864105d",
+    "timeoutScriptHex": "56b2752079be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798ac"
+  },
+  "activeVault": {
+    "address": "tb1pc40pldh5x7d2v3x9pecfxpaedmnzrxj807dsg4wr7lz25ayay6eq23pw6a",
+    "outputScriptHex": "5120c55e1fb6f4379aa644c50e709307b96ee6219a477f9b0455c3f7c4aa749d26b2",
+    "timeoutScriptHex": "5ab27520c6047f9441ed7d6d3045406e95c07cd85c778e4b8cef3ca7abac09b95c709ee5ac"
+  }
+}

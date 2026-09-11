@@ -1,0 +1,27 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://example.invalid/bitcoin-asset-lending/loan-terms.schema.json",
+  "title": "Runes secured loan terms",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "version", "network", "assetProtocol", "runeId", "collateralAmount",
+    "principalSats", "interestSats", "loanTermBlocks", "fundingTimeoutBlocks",
+    "borrowerAddress", "borrowerPubkey", "lenderAddress", "lenderPubkey"
+  ],
+  "properties": {
+    "version": { "const": 1 },
+    "network": { "const": "bitcoin-testnet4" },
+    "assetProtocol": { "const": "runes" },
+    "runeId": { "type": "string", "pattern": "^[1-9][0-9]*:[0-9]+$" },
+    "collateralAmount": { "type": "string", "pattern": "^[1-9][0-9]*$" },
+    "principalSats": { "type": "integer", "minimum": 546, "maximum": 2100000000000000 },
+    "interestSats": { "type": "integer", "minimum": 0, "maximum": 2100000000000000 },
+    "loanTermBlocks": { "type": "integer", "minimum": 1, "maximum": 65535 },
+    "fundingTimeoutBlocks": { "type": "integer", "minimum": 1, "maximum": 65535 },
+    "borrowerAddress": { "type": "string", "pattern": "^tb1[qp][a-z0-9]{38,}$" },
+    "borrowerPubkey": { "type": "string", "pattern": "^(02|03)[0-9a-f]{64}$" },
+    "lenderAddress": { "type": "string", "pattern": "^tb1[qp][a-z0-9]{38,}$" },
+    "lenderPubkey": { "type": "string", "pattern": "^(02|03)[0-9a-f]{64}$" }
+  }
+}
