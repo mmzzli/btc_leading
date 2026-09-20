@@ -88,6 +88,7 @@ function App() {
   const [importText, setImportText] = useState('')
   const [importedOffer, setImportedOffer] = useState<SignedBrc20Offer | null>(null)
   const [balances, setBalances] = useState<Brc20Balance[] | null>(null)
+  const [manualApiKey, setManualApiKey] = useState('')
   const [busy, setBusy] = useState(false)
   const [notice, setNotice] = useState('')
 
@@ -95,6 +96,7 @@ function App() {
   const selectedBalance = useMemo(() => importedOffer && balances
     ? balances.find((item) => item.ticker.toLowerCase() === importedOffer.terms.ticker.toLowerCase())
     : undefined, [balances, importedOffer])
+  const apiKey = (import.meta.env.VITE_UNISAT_OPENAPI_KEY ?? manualApiKey).trim()
 
   function selectFlow(next: Flow) {
     setFlow(next)
@@ -109,6 +111,7 @@ function App() {
     setSignedOffer(null)
     setImportedOffer(null)
     setBalances(null)
+    setManualApiKey('')
     setNotice('')
   }
 
@@ -118,6 +121,7 @@ function App() {
     setFrozenTerms(null)
     setSignedOffer(null)
     setBalances(null)
+    setManualApiKey('')
     setNotice('钱包已断开。如需继续，请重新连接。')
   }
 
@@ -187,7 +191,7 @@ function App() {
     setBusy(true)
     setNotice('')
     try {
-      const data = await fetchBrc20Balances(wallet.wallet.address, import.meta.env.VITE_UNISAT_OPENAPI_KEY ?? '')
+      const data = await fetchBrc20Balances(wallet.wallet.address, apiKey)
       setBalances(data)
     } catch (reason) {
       setNotice(reason instanceof Error ? reason.message : '无法读取 BRC-20 资产')
@@ -313,7 +317,19 @@ function App() {
                 <span className="step-tag">第 4 步</span><h1>检查你的 {importedOffer.terms.ticker} 抵押品</h1>
                 <p className="lead">系统需要区分可用余额和已经制作好的 Transfer 铭文。</p>
                 <Guide action="点击检查。这里只读取公开链上数据，不会让钱包签名。" result={`确认你能否准备 ${importedOffer.terms.collateralAmount} ${importedOffer.terms.ticker} 的抵押凭证。`} />
-                {!balances && <button className="primary large centered" disabled={busy} onClick={checkBalances}>{busy ? '正在查询…' : '检查我的 BRC-20 资产'}</button>}
+                {!import.meta.env.VITE_UNISAT_OPENAPI_KEY && !balances && (
+                  <div className="api-setup">
+                    <div><span className="setup-number">1</span><p><b>领取免费的查询 Key</b>打开 UniSat Developer Center，注册或登录后创建 Free Plan API Key。</p></div>
+                    <a className="external-button" href="https://developer.unisat.io" target="_blank" rel="noreferrer">打开 UniSat Developer Center ↗</a>
+                    <div><span className="setup-number">2</span><p><b>把 Key 临时粘贴到下面</b>它只存在当前页面内存中，刷新或关闭页面后会消失。</p></div>
+                    <label>UniSat OpenAPI Key<input type="password" autoComplete="off" value={manualApiKey} onChange={(event) => setManualApiKey(event.target.value)} placeholder="粘贴 API Key，不需要填写 Bearer" /></label>
+                    <details>
+                      <summary>开发者方式：使用 .env.local</summary>
+                      <div className="env-guide"><code>VITE_UNISAT_OPENAPI_KEY=你的_API_KEY</code><p>保存到项目根目录的 <span className="mono">.env.local</span>，然后重启开发服务。</p></div>
+                    </details>
+                  </div>
+                )}
+                {!balances && <button className="primary large centered" disabled={busy || !apiKey} onClick={checkBalances}>{busy ? '正在查询…' : apiKey ? '使用这个 Key 检查资产' : '请先填写 API Key'}</button>}
                 {balances && (
                   <div className="balance-grid">
                     <div><small>钱包总余额</small><strong>{selectedBalance?.overallBalance ?? '0'} {importedOffer.terms.ticker}</strong></div>
@@ -321,7 +337,7 @@ function App() {
                     <div><small>已做好的 Transfer</small><strong>{selectedBalance?.transferableBalance ?? '0'}</strong></div>
                   </div>
                 )}
-                {notice && <div className="callout warning"><b>暂时无法查询</b><p>{notice}。本地开发需要在 <span className="mono">.env.local</span> 配置 UniSat OpenAPI Key；商业部署会由后端安全查询。</p></div>}
+                {notice && <div className="callout warning"><b>查询没有成功</b><p>{notice}。请检查 Key 是否复制完整、是否仍在有效期内，然后重试。</p></div>}
                 <div className="coming-next"><b>链上步骤暂未开放</b><p>下一阶段会引导 Alice 制作精确金额的 Transfer 铭文，并让双方在同一次贷款激活中交换 BTC 与抵押品。协议通过测试向量和安全验收前，不提供会移动资产的按钮。</p></div>
               </>
             )}
