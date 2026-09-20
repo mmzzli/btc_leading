@@ -112,6 +112,15 @@ function App() {
     setNotice('')
   }
 
+  async function disconnectWallet() {
+    await wallet.disconnect()
+    setStep(flow ? 1 : 0)
+    setFrozenTerms(null)
+    setSignedOffer(null)
+    setBalances(null)
+    setNotice('钱包已断开。如需继续，请重新连接。')
+  }
+
   function freezeOffer() {
     if (!wallet.wallet || !wallet.isTestnet4) return
     const created = new Date()
@@ -193,7 +202,7 @@ function App() {
     <main>
       <header className="topbar">
         <button className="brand" onClick={reset}><span>₿</span><div><b>BRC-20 借贷</b><small>Bitcoin Testnet4</small></div></button>
-        {wallet.wallet && <div className="wallet-pill"><span className={wallet.isTestnet4 ? 'dot ok' : 'dot'} /><div><b>{short(wallet.wallet.address)}</b><small>{wallet.wallet.chain.name}</small></div></div>}
+        {wallet.wallet && <div className="wallet-session"><div className="wallet-pill"><span className={wallet.isTestnet4 ? 'dot ok' : 'dot'} /><div><b>{short(wallet.wallet.address)}</b><small>{wallet.wallet.chain.name}</small></div></div><button className="disconnect-button" onClick={disconnectWallet}>断开钱包</button></div>}
       </header>
 
       {!flow ? (

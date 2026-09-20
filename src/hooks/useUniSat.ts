@@ -62,6 +62,17 @@ export function useUniSat() {
     }
   }, [readWallet])
 
+  const disconnect = useCallback(async () => {
+    if (!window.unisat) return
+    setError('')
+    try {
+      await window.unisat.disconnect()
+      setWallet(null)
+    } catch (reason) {
+      setError(messageFrom(reason))
+    }
+  }, [])
+
   const signMessage = useCallback(async (message: string) => {
     if (!window.unisat || !wallet) throw new Error('请先连接 UniSat Wallet')
     if (wallet.chain.enum !== 'BITCOIN_TESTNET4') throw new Error('请先切换到 Bitcoin Testnet4')
@@ -87,6 +98,7 @@ export function useUniSat() {
     error,
     isTestnet4: wallet?.chain.enum === 'BITCOIN_TESTNET4',
     connect,
+    disconnect,
     switchToTestnet4,
     signMessage,
   }

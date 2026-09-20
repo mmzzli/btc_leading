@@ -11,6 +11,7 @@ interface UniSatWallet {
   getAccounts(): Promise<string[]>
   getPublicKey(): Promise<string>
   getChain(): Promise<UniSatChain>
+  disconnect(): Promise<void>
   switchChain(chain: string): Promise<UniSatChain>
   signMessage(message: string, type?: 'ecdsa' | 'bip322-simple'): Promise<string>
   on(event: 'accountsChanged', handler: (accounts: string[]) => void): void
