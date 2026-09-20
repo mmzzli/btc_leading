@@ -10,6 +10,16 @@ function messageFrom(error: unknown): string {
   return error instanceof Error ? error.message : String(error)
 }
 
+function signedPsbtFrom(value: string | Record<string, unknown>): string {
+  if (typeof value === 'string' && value) return value
+  const object = value as Record<string, unknown>
+  for (const key of ['psbt', 'psbtHex', 'signedPsbt', 'hex', 'base64']) {
+    const candidate = object[key]
+    if (typeof candidate === 'string' && candidate) return candidate
+  }
+  throw new Error('UniSat 返回了无法识别的 PSBT')
+}
+
 export function useUniSat() {
   const [wallet, setWallet] = useState<WalletSnapshot | null>(null)
   const [connecting, setConnecting] = useState(false)
@@ -85,6 +95,19 @@ export function useUniSat() {
     await window.unisat.inscribeTransfer(ticker, amount)
   }, [wallet])
 
+  const signPsbt = useCallback(async (psbtHex: string, inputs: Array<{ index: number; publicKey: string; useTweakedSigner: boolean }>, autoFinalized = false) => {
+    if (!window.unisat || !wallet) throw new Error('请先连接 UniSat Wallet')
+    if (wallet.chain.enum !== 'BITCOIN_TESTNET4') throw new Error('请先切换到 Bitcoin Testnet4')
+    const result = await window.unisat.signPsbt(psbtHex, { autoFinalized, toSignInputs: inputs })
+    return signedPsbtFrom(result)
+  }, [wallet])
+
+  const pushPsbt = useCallback(async (psbtHex: string) => {
+    if (!window.unisat || !wallet) throw new Error('请先连接 UniSat Wallet')
+    if (wallet.chain.enum !== 'BITCOIN_TESTNET4') throw new Error('请先切换到 Bitcoin Testnet4')
+    return window.unisat.pushPsbt(psbtHex)
+  }, [wallet])
+
   useEffect(() => {
     if (!window.unisat) return
     const handleAccounts = (accounts: string[]) => void readWallet(accounts).catch((reason) => setError(messageFrom(reason)))
@@ -108,5 +131,7 @@ export function useUniSat() {
     switchToTestnet4,
     signMessage,
     inscribeTransfer,
+    signPsbt,
+    pushPsbt,
   }
 }

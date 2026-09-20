@@ -9,9 +9,11 @@ import {
   type SignedBrc20Offer,
 } from './domain/brc20Offer'
 import { useUniSat } from './hooks/useUniSat'
-import { fetchBrc20Balances, fetchTransferableInscriptions, type Brc20Balance, type TransferableInscription } from './services/brc20Api'
+import { fetchAvailableUtxos, fetchBrc20Balances, fetchTransferableInscriptions, fetchUtxo, outpointFromTransfer, type Brc20Balance, type TransferableInscription } from './services/brc20Api'
+import { type BorrowerAcceptance } from './domain/loanProtocol'
+import { LoanDesk } from './components/LoanDesk'
 
-type Flow = 'lender' | 'borrower'
+type Flow = 'lender' | 'borrower' | 'desk'
 
 interface OfferForm {
   ticker: string
@@ -33,6 +35,7 @@ const initialForm: OfferForm = {
 
 const lenderSteps = ['选择身份', '连接钱包', '设置报价', '核对并签名', '分享报价']
 const borrowerSteps = ['选择身份', '连接钱包', '导入报价', '核对报价', '检查抵押品', '准备 Transfer']
+const deskSteps = ['进入工作台', '连接钱包', '选择当前任务', '核对资料', '钱包签名', '完成']
 
 function short(value: string, size = 8) {
   return value.length > size * 2 ? `${value.slice(0, size)}…${value.slice(-size)}` : value
@@ -90,11 +93,12 @@ function App() {
   const [balances, setBalances] = useState<Brc20Balance[] | null>(null)
   const [transferInscriptions, setTransferInscriptions] = useState<TransferableInscription[]>([])
   const [transferRequested, setTransferRequested] = useState(false)
+  const [acceptance, setAcceptance] = useState<BorrowerAcceptance | null>(null)
   const [manualApiKey, setManualApiKey] = useState('')
   const [busy, setBusy] = useState(false)
   const [notice, setNotice] = useState('')
 
-  const labels = flow === 'lender' ? lenderSteps : borrowerSteps
+  const labels = flow === 'lender' ? lenderSteps : flow === 'borrower' ? borrowerSteps : deskSteps
   const selectedBalance = useMemo(() => importedOffer && balances
     ? balances.find((item) => item.ticker.toLowerCase() === importedOffer.terms.ticker.toLowerCase())
     : undefined, [balances, importedOffer])
@@ -119,6 +123,7 @@ function App() {
     setBalances(null)
     setTransferInscriptions([])
     setTransferRequested(false)
+    setAcceptance(null)
     setManualApiKey('')
     setNotice('')
   }
@@ -131,6 +136,7 @@ function App() {
     setBalances(null)
     setTransferInscriptions([])
     setTransferRequested(false)
+    setAcceptance(null)
     setManualApiKey('')
     setNotice('钱包已断开。如需继续，请重新连接。')
   }
@@ -228,6 +234,44 @@ function App() {
     }
   }
 
+  async function createAcceptance() {
+    if (!wallet.wallet || !importedOffer || !exactTransfer) return
+    setBusy(true)
+    setNotice('')
+    try {
+      if (!apiKey) throw new Error('请先填写 UniSat OpenAPI Key')
+      const outpoint = outpointFromTransfer(exactTransfer)
+      const [transferUtxo, feeUtxos] = await Promise.all([
+        fetchUtxo(outpoint.txid, outpoint.vout, apiKey),
+        fetchAvailableUtxos(wallet.wallet.address, apiKey),
+      ])
+      const feeUtxo = feeUtxos.sort((left, right) => right.satoshi - left.satoshi)[0]
+      if (!feeUtxo) throw new Error('Alice 没有可用于激活贷款的 BTC UTXO')
+      setAcceptance({
+        version: 1,
+        offerId: importedOffer.offerId,
+        terms: importedOffer.terms,
+        borrowerAddress: wallet.wallet.address,
+        borrowerPubkey: wallet.wallet.publicKey.toLowerCase(),
+        transferInscriptionId: exactTransfer.inscriptionId,
+        transferUtxo,
+        feeUtxo,
+        feeRate: 1,
+        acceptedAt: new Date().toISOString(),
+      })
+    } catch (reason) {
+      setNotice(reason instanceof Error ? reason.message : '无法生成接受申请')
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  async function copyAcceptance() {
+    if (!acceptance) return
+    await navigator.clipboard.writeText(JSON.stringify(acceptance, null, 2))
+    setNotice('Alice 接受申请已复制。请交给 Bob 进入完整贷款工作台。')
+  }
+
   const walletStep = flow && step === 1
 
   return (
@@ -250,7 +294,8 @@ function App() {
               <span className="role-icon alice">A</span><div><small>Alice · 借款人</small><strong>我要抵押 BRC-20 借 BTC</strong><p>导入 Bob 的报价并检查自己的抵押资产</p></div><i>→</i>
             </button>
           </div>
-          <div className="safety-strip"><b>当前不会转走资产</b><span>这一版只完成报价签名与资产检查。链上贷款协议通过验收后才开放转账。</span></div>
+          <button className="continue-button" onClick={() => selectFlow('desk')}><span>已有资料</span><b>继续放款、还款或逾期领取 →</b></button>
+          <div className="safety-strip"><b>报价阶段不会转走资产</b><span>进入完整贷款工作台后，只有明确标注“签名并广播”的步骤会产生 Testnet4 链上交易，UniSat 会再次要求你确认。</span></div>
         </section>
       ) : (
         <>
@@ -261,7 +306,7 @@ function App() {
             {walletStep && (
               <>
                 <span className="step-tag">第 1 步</span>
-                <h1>连接 {flow === 'lender' ? 'Bob' : 'Alice'} 的钱包</h1>
+                <h1>连接 {flow === 'lender' ? 'Bob' : flow === 'borrower' ? 'Alice' : '当前操作人'}的钱包</h1>
                 <p className="lead">地址和公钥会自动读取，你不需要复制任何技术参数。</p>
                 <Guide action="在装有 UniSat 扩展的 Chrome 中打开本页，然后点击下方按钮。" result="页面显示你的 tb1… 地址和 Bitcoin Testnet4。" />
                 {!wallet.installed && <div className="callout warning"><b>这里没有检测到 UniSat</b><p>Codex 内置浏览器不能加载钱包扩展。请在 Chrome 打开 <span className="mono">http://127.0.0.1:5174/</span>。</p></div>}
@@ -404,8 +449,18 @@ function App() {
                 {!exactTransfer && !transferRequested && <div className="actions"><button className="primary large" disabled={busy} onClick={prepareTransfer}>{busy ? '正在打开 UniSat…' : `在 UniSat 制作 ${importedOffer.terms.collateralAmount} ${importedOffer.terms.ticker} Transfer`}</button></div>}
                 {transferRequested && !exactTransfer && <div className="callout warning"><b>等待 Transfer 铭文确认</b><p>完成 UniSat 的下单和付款后，需要等待交易确认。确认后点击下面按钮重新读取。</p><button className="secondary" disabled={busy} onClick={checkBalances}>{busy ? '正在查询…' : '我已完成，重新检查'}</button></div>}
                 {exactTransfer && <div className="callout success"><b>抵押凭证已准备好</b><p>找到 {exactTransfer.amount} {exactTransfer.ticker.toUpperCase()} Transfer，铭文编号 <span className="mono">{short(exactTransfer.inscriptionId, 12)}</span>。</p></div>}
+                {exactTransfer && !acceptance && <div className="actions"><button className="primary large" disabled={busy} onClick={createAcceptance}>{busy ? '正在读取 UTXO…' : '生成 Alice 接受申请'}</button></div>}
+                {acceptance && <div className="success-card"><b>Alice 接受申请已生成</b><p>里面包含抵押凭证、手续费 UTXO、Alice 地址和公钥。Bob 将用它构造双方共同签署的放款交易。</p><textarea className="offer-json" readOnly value={JSON.stringify(acceptance, null, 2)} /><button className="primary large" onClick={copyAcceptance}>复制给 Bob</button></div>}
                 {notice && <div className="callout danger"><b>没有完成</b><p>{notice}</p></div>}
-                <div className="coming-next"><b>下一步是激活贷款</b><p>Transfer 准备完成后，还需要构造双方共同核对的贷款激活交易：Bob 的 BTC 给 Alice，同时 Alice 的抵押凭证进入贷款金库。这一部分仍在协议安全验收中。</p></div>
+                <div className="coming-next"><b>下一步是 Bob 构造放款草稿</b><p>复制接受申请后，返回首页进入“完整贷款工作台”，连接 Bob 钱包，选择“收到 Alice 的接受申请”。</p></div>
+              </>
+            )}
+
+            {flow === 'desk' && step === 2 && wallet.wallet && (
+              <>
+                <span className="step-tag">完整流程</span><h1>贷款工作台</h1>
+                <p className="lead">双方通过可复制的交易包交接。每个钱包只签属于自己的输入，签名前都能在 UniSat 中检查。</p>
+                <LoanDesk address={wallet.wallet.address} apiKey={apiKey} manualApiKey={manualApiKey} setManualApiKey={setManualApiKey} signPsbt={wallet.signPsbt} pushPsbt={wallet.pushPsbt} />
               </>
             )}
           </section>

@@ -15,6 +15,17 @@ export interface VaultDefinition {
   timeoutScriptHex: string
 }
 
+export interface VaultSpendPath {
+  leafVersion: number
+  scriptHex: string
+  controlBlockHex: string
+}
+
+export interface SpendableVaultDefinition extends VaultDefinition {
+  cooperativePath: VaultSpendPath
+  timeoutPath: VaultSpendPath
+}
+
 interface VaultInput {
   borrowerPubkey: string
   lenderPubkey: string
@@ -51,13 +62,37 @@ export function buildCsvScript(relativeBlocks: number, pubkey: string): Uint8Arr
   ])
 }
 
-function buildVault(input: VaultInput, timeoutOwner: 'borrower' | 'lender'): VaultDefinition {
+function spendPath(payment: bitcoin.payments.Payment, script: Uint8Array): VaultSpendPath {
+  const witness = payment.witness
+  if (!witness?.length) throw new Error('Unable to construct Taproot control block')
+  return {
+    leafVersion: 0xc0,
+    scriptHex: bytesToHex(script),
+    controlBlockHex: bytesToHex(witness[witness.length - 1]),
+  }
+}
+
+function buildVault(input: VaultInput, timeoutOwner: 'borrower' | 'lender'): SpendableVaultDefinition {
   const cooperativeScript = buildCooperativeScript(input.borrowerPubkey, input.lenderPubkey)
   const timeoutPubkey = timeoutOwner === 'borrower' ? input.borrowerPubkey : input.lenderPubkey
   const timeoutScript = buildCsvScript(input.relativeBlocks, timeoutPubkey)
+  const scriptTree: [{ output: Uint8Array }, { output: Uint8Array }] = [{ output: cooperativeScript }, { output: timeoutScript }]
   const payment = bitcoin.payments.p2tr({
     internalPubkey: TAPROOT_NUMS_KEY,
-    scriptTree: [{ output: cooperativeScript }, { output: timeoutScript }],
+    scriptTree,
+    network: bitcoin.networks.testnet,
+  })
+
+  const cooperativePayment = bitcoin.payments.p2tr({
+    internalPubkey: TAPROOT_NUMS_KEY,
+    scriptTree,
+    redeem: { output: cooperativeScript, redeemVersion: 0xc0 },
+    network: bitcoin.networks.testnet,
+  })
+  const timeoutPayment = bitcoin.payments.p2tr({
+    internalPubkey: TAPROOT_NUMS_KEY,
+    scriptTree,
+    redeem: { output: timeoutScript, redeemVersion: 0xc0 },
     network: bitcoin.networks.testnet,
   })
 
@@ -67,13 +102,15 @@ function buildVault(input: VaultInput, timeoutOwner: 'borrower' | 'lender'): Vau
     outputScriptHex: bytesToHex(payment.output),
     cooperativeScriptHex: bytesToHex(cooperativeScript),
     timeoutScriptHex: bytesToHex(timeoutScript),
+    cooperativePath: spendPath(cooperativePayment, cooperativeScript),
+    timeoutPath: spendPath(timeoutPayment, timeoutScript),
   }
 }
 
-export function buildPendingVault(input: VaultInput): VaultDefinition {
+export function buildPendingVault(input: VaultInput): SpendableVaultDefinition {
   return buildVault(input, 'borrower')
 }
 
-export function buildActiveVault(input: VaultInput): VaultDefinition {
+export function buildActiveVault(input: VaultInput): SpendableVaultDefinition {
   return buildVault(input, 'lender')
 }
