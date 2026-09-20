@@ -43,6 +43,8 @@ h1 { margin-top: 9px; font-size: clamp(30px, 5vw, 48px); line-height: 1.08; lett
 .guide p { color: #8499a3; font-size: 12px; line-height: 1.55; }.guide b { display: block; margin-bottom: 3px; color: #dce8eb; }
 .callout, .coming-next { margin: 20px 0; padding: 16px 18px; border-radius: 13px; }.callout b, .coming-next b { display: block; margin-bottom: 5px; }.callout p, .coming-next p { font-size: 13px; line-height: 1.6; }
 .callout.warning { color: #f8dca6; border: 1px solid #5a4420; background: #2b2113; }.callout.danger { color: #ffc1c1; border: 1px solid #59303a; background: #29181e; }
+.callout.success { color: #a8ead5; border: 1px solid #275143; background: #0a1d19; }
+.asset-help ol { margin: 12px 0 16px; padding-left: 20px; color: #d7c49e; font-size: 12px; line-height: 1.8; }.asset-help .secondary { color: #f5d594; border-color: #6b5229; background: #332613; }
 .coming-next { color: #9bb0ba; border: 1px solid #2c424d; background: #0b1820; }.coming-next b { color: #f0c46c; }
 .identity { display: grid; justify-items: center; gap: 8px; margin: 24px auto; padding: 25px; border: 1px solid #275143; background: #0a1d19; border-radius: 16px; }.identity strong { font: 500 15px DM Mono, monospace; }.identity small { color: #81a198; }.status.ok { color: #66dab6; font-size: 12px; font-weight: 800; }
 .actions { display: flex; align-items: center; justify-content: flex-end; gap: 12px; margin-top: 28px; }

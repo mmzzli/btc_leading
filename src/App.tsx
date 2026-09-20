@@ -97,6 +97,9 @@ function App() {
     ? balances.find((item) => item.ticker.toLowerCase() === importedOffer.terms.ticker.toLowerCase())
     : undefined, [balances, importedOffer])
   const apiKey = (import.meta.env.VITE_UNISAT_OPENAPI_KEY ?? manualApiKey).trim()
+  const requiredCollateral = Number(importedOffer?.terms.collateralAmount ?? 0)
+  const overallCollateral = Number(selectedBalance?.overallBalance ?? 0)
+  const hasEnoughCollateral = overallCollateral >= requiredCollateral
 
   function selectFlow(next: Flow) {
     setFlow(next)
@@ -331,11 +334,28 @@ function App() {
                 )}
                 {!balances && <button className="primary large centered" disabled={busy || !apiKey} onClick={checkBalances}>{busy ? '正在查询…' : apiKey ? '使用这个 Key 检查资产' : '请先填写 API Key'}</button>}
                 {balances && (
-                  <div className="balance-grid">
-                    <div><small>钱包总余额</small><strong>{selectedBalance?.overallBalance ?? '0'} {importedOffer.terms.ticker}</strong></div>
-                    <div><small>可制作 Transfer</small><strong>{selectedBalance?.availableBalance ?? '0'}</strong></div>
-                    <div><small>已做好的 Transfer</small><strong>{selectedBalance?.transferableBalance ?? '0'}</strong></div>
-                  </div>
+                  <>
+                    <div className="balance-grid">
+                      <div><small>钱包总余额</small><strong>{selectedBalance?.overallBalance ?? '0'} {importedOffer.terms.ticker}</strong></div>
+                      <div><small>可制作 Transfer</small><strong>{selectedBalance?.availableBalance ?? '0'}</strong></div>
+                      <div><small>已做好的 Transfer</small><strong>{selectedBalance?.transferableBalance ?? '0'}</strong></div>
+                    </div>
+                    {!hasEnoughCollateral && (
+                      <div className="callout warning asset-help">
+                        <b>这个账户的 {importedOffer.terms.ticker} 不够</b>
+                        <p>报价需要 {importedOffer.terms.collateralAmount} {importedOffer.terms.ticker}，当前地址 <span className="mono">{short(wallet.wallet?.address ?? '', 12)}</span> 只有 {selectedBalance?.overallBalance ?? '0'}。</p>
+                        <ol>
+                          <li>打开 UniSat，切换到真正持有 {importedOffer.terms.ticker} 的账户。</li>
+                          <li>确认网络仍是 Bitcoin Testnet4。</li>
+                          <li>回到这里点击“重新检查”。如果所有账户都是 0，需要先 Mint 或接收 {importedOffer.terms.ticker}。</li>
+                        </ol>
+                        <button className="secondary" disabled={busy} onClick={checkBalances}>{busy ? '正在查询…' : '重新检查这个账户'}</button>
+                      </div>
+                    )}
+                    {hasEnoughCollateral && (
+                      <div className="callout success"><b>抵押数量足够</b><p>这个账户可以覆盖报价要求的 {importedOffer.terms.collateralAmount} {importedOffer.terms.ticker}。下一阶段将判断是否需要制作精确金额的 Transfer 铭文。</p></div>
+                    )}
+                  </>
                 )}
                 {notice && <div className="callout warning"><b>查询没有成功</b><p>{notice}。请检查 Key 是否复制完整、是否仍在有效期内，然后重试。</p></div>}
                 <div className="coming-next"><b>链上步骤暂未开放</b><p>下一阶段会引导 Alice 制作精确金额的 Transfer 铭文，并让双方在同一次贷款激活中交换 BTC 与抵押品。协议通过测试向量和安全验收前，不提供会移动资产的按钮。</p></div>
