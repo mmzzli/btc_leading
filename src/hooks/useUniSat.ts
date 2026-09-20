@@ -62,6 +62,12 @@ export function useUniSat() {
     }
   }, [readWallet])
 
+  const signMessage = useCallback(async (message: string) => {
+    if (!window.unisat || !wallet) throw new Error('请先连接 UniSat Wallet')
+    if (wallet.chain.enum !== 'BITCOIN_TESTNET4') throw new Error('请先切换到 Bitcoin Testnet4')
+    return window.unisat.signMessage(message, 'bip322-simple')
+  }, [wallet])
+
   useEffect(() => {
     if (!window.unisat) return
     const handleAccounts = (accounts: string[]) => void readWallet(accounts).catch((reason) => setError(messageFrom(reason)))
@@ -82,5 +88,6 @@ export function useUniSat() {
     isTestnet4: wallet?.chain.enum === 'BITCOIN_TESTNET4',
     connect,
     switchToTestnet4,
+    signMessage,
   }
 }
