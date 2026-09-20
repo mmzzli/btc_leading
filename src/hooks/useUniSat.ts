@@ -66,7 +66,7 @@ export function useUniSat() {
     if (!window.unisat) return
     setError('')
     try {
-      await window.unisat.disconnect()
+      if (window.unisat.disconnect) await window.unisat.disconnect()
       setWallet(null)
     } catch (reason) {
       setError(messageFrom(reason))
