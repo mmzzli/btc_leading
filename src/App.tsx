@@ -9,7 +9,7 @@ import {
   type SignedBrc20Offer,
 } from './domain/brc20Offer'
 import { useUniSat } from './hooks/useUniSat'
-import { fetchBrc20Balances, type Brc20Balance } from './services/brc20Api'
+import { fetchBrc20Balances, fetchTransferableInscriptions, type Brc20Balance, type TransferableInscription } from './services/brc20Api'
 
 type Flow = 'lender' | 'borrower'
 
@@ -32,7 +32,7 @@ const initialForm: OfferForm = {
 }
 
 const lenderSteps = ['选择身份', '连接钱包', '设置报价', '核对并签名', '分享报价']
-const borrowerSteps = ['选择身份', '连接钱包', '导入报价', '核对报价', '检查抵押品']
+const borrowerSteps = ['选择身份', '连接钱包', '导入报价', '核对报价', '检查抵押品', '准备 Transfer']
 
 function short(value: string, size = 8) {
   return value.length > size * 2 ? `${value.slice(0, size)}…${value.slice(-size)}` : value
@@ -88,6 +88,8 @@ function App() {
   const [importText, setImportText] = useState('')
   const [importedOffer, setImportedOffer] = useState<SignedBrc20Offer | null>(null)
   const [balances, setBalances] = useState<Brc20Balance[] | null>(null)
+  const [transferInscriptions, setTransferInscriptions] = useState<TransferableInscription[]>([])
+  const [transferRequested, setTransferRequested] = useState(false)
   const [manualApiKey, setManualApiKey] = useState('')
   const [busy, setBusy] = useState(false)
   const [notice, setNotice] = useState('')
@@ -100,6 +102,7 @@ function App() {
   const requiredCollateral = Number(importedOffer?.terms.collateralAmount ?? 0)
   const overallCollateral = Number(selectedBalance?.overallBalance ?? 0)
   const hasEnoughCollateral = overallCollateral >= requiredCollateral
+  const exactTransfer = transferInscriptions.find((item) => item.amount === importedOffer?.terms.collateralAmount)
 
   function selectFlow(next: Flow) {
     setFlow(next)
@@ -114,6 +117,8 @@ function App() {
     setSignedOffer(null)
     setImportedOffer(null)
     setBalances(null)
+    setTransferInscriptions([])
+    setTransferRequested(false)
     setManualApiKey('')
     setNotice('')
   }
@@ -124,6 +129,8 @@ function App() {
     setFrozenTerms(null)
     setSignedOffer(null)
     setBalances(null)
+    setTransferInscriptions([])
+    setTransferRequested(false)
     setManualApiKey('')
     setNotice('钱包已断开。如需继续，请重新连接。')
   }
@@ -194,10 +201,28 @@ function App() {
     setBusy(true)
     setNotice('')
     try {
-      const data = await fetchBrc20Balances(wallet.wallet.address, apiKey)
-      setBalances(data)
+      const [balanceData, inscriptionData] = await Promise.all([
+        fetchBrc20Balances(wallet.wallet.address, apiKey),
+        fetchTransferableInscriptions(wallet.wallet.address, importedOffer.terms.ticker, apiKey),
+      ])
+      setBalances(balanceData)
+      setTransferInscriptions(inscriptionData)
     } catch (reason) {
       setNotice(reason instanceof Error ? reason.message : '无法读取 BRC-20 资产')
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  async function prepareTransfer() {
+    if (!importedOffer) return
+    setBusy(true)
+    setNotice('')
+    try {
+      await wallet.inscribeTransfer(importedOffer.terms.ticker.toLowerCase(), importedOffer.terms.collateralAmount)
+      setTransferRequested(true)
+    } catch (reason) {
+      setNotice(reason instanceof Error ? reason.message : '无法打开 Transfer 铭文流程')
     } finally {
       setBusy(false)
     }
@@ -353,12 +378,34 @@ function App() {
                       </div>
                     )}
                     {hasEnoughCollateral && (
-                      <div className="callout success"><b>抵押数量足够</b><p>这个账户可以覆盖报价要求的 {importedOffer.terms.collateralAmount} {importedOffer.terms.ticker}。下一阶段将判断是否需要制作精确金额的 Transfer 铭文。</p></div>
+                      <div className="callout success"><b>抵押数量足够</b><p>这个账户可以覆盖报价要求的 {importedOffer.terms.collateralAmount} {importedOffer.terms.ticker}。{exactTransfer ? '并且已经找到金额精确匹配的 Transfer 铭文。' : '还需要准备一张金额精确匹配的 Transfer 铭文。'}</p></div>
                     )}
                   </>
                 )}
                 {notice && <div className="callout warning"><b>查询没有成功</b><p>{notice}。请检查 Key 是否复制完整、是否仍在有效期内，然后重试。</p></div>}
-                <div className="coming-next"><b>链上步骤暂未开放</b><p>下一阶段会引导 Alice 制作精确金额的 Transfer 铭文，并让双方在同一次贷款激活中交换 BTC 与抵押品。协议通过测试向量和安全验收前，不提供会移动资产的按钮。</p></div>
+                {balances && hasEnoughCollateral && <div className="actions"><button className="primary large" onClick={() => setStep(5)}>下一步：准备 {importedOffer.terms.collateralAmount} {importedOffer.terms.ticker} Transfer</button></div>}
+              </>
+            )}
+
+            {flow === 'borrower' && step === 5 && importedOffer && (
+              <>
+                <span className="step-tag">第 5 步</span><h1>准备抵押凭证</h1>
+                <p className="lead">BRC-20 不能直接从余额发送。Alice 需要先把 {importedOffer.terms.collateralAmount} {importedOffer.terms.ticker} 制作成一次性的 Transfer 铭文。</p>
+                <Guide action={exactTransfer ? '已经找到精确金额的 Transfer 铭文，不需要重复制作。' : `点击下方按钮，UniSat 会打开 ${importedOffer.terms.collateralAmount} ${importedOffer.terms.ticker} Transfer 的制作流程。`} result="交易确认后，资产检查会显示一张金额精确匹配的 Transfer 铭文。" />
+                <div className="summary-card transfer-review">
+                  <dl>
+                    <div><dt>将准备</dt><dd>{importedOffer.terms.collateralAmount} {importedOffer.terms.ticker} Transfer 铭文</dd></div>
+                    <div><dt>接收地址</dt><dd className="mono">Alice 当前钱包</dd></div>
+                    <div><dt>钱包操作</dt><dd>UniSat 铭文下单与付款</dd></div>
+                    <div><dt>费用</dt><dd>由 UniSat 在确认前展示</dd></div>
+                  </dl>
+                </div>
+                {!exactTransfer && !transferRequested && <div className="callout warning"><b>点击后会产生链上费用</b><p>UniSat 会展示具体 tBTC 金额。请核对 ticker 是 {importedOffer.terms.ticker}、数量是 {importedOffer.terms.collateralAmount}，确认无误后再由你在钱包中付款。</p></div>}
+                {!exactTransfer && !transferRequested && <div className="actions"><button className="primary large" disabled={busy} onClick={prepareTransfer}>{busy ? '正在打开 UniSat…' : `在 UniSat 制作 ${importedOffer.terms.collateralAmount} ${importedOffer.terms.ticker} Transfer`}</button></div>}
+                {transferRequested && !exactTransfer && <div className="callout warning"><b>等待 Transfer 铭文确认</b><p>完成 UniSat 的下单和付款后，需要等待交易确认。确认后点击下面按钮重新读取。</p><button className="secondary" disabled={busy} onClick={checkBalances}>{busy ? '正在查询…' : '我已完成，重新检查'}</button></div>}
+                {exactTransfer && <div className="callout success"><b>抵押凭证已准备好</b><p>找到 {exactTransfer.amount} {exactTransfer.ticker.toUpperCase()} Transfer，铭文编号 <span className="mono">{short(exactTransfer.inscriptionId, 12)}</span>。</p></div>}
+                {notice && <div className="callout danger"><b>没有完成</b><p>{notice}</p></div>}
+                <div className="coming-next"><b>下一步是激活贷款</b><p>Transfer 准备完成后，还需要构造双方共同核对的贷款激活交易：Bob 的 BTC 给 Alice，同时 Alice 的抵押凭证进入贷款金库。这一部分仍在协议安全验收中。</p></div>
               </>
             )}
           </section>
