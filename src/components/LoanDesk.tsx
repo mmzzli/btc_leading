@@ -21,6 +21,8 @@ type DeskTask = 'bob-build' | 'alice-sign' | 'bob-broadcast' | 'alice-repay' | '
 interface Props {
   address: string
   apiKey: string
+  queryReady: boolean
+  showManualApiKey: boolean
   manualApiKey: string
   setManualApiKey: (value: string) => void
   signPsbt: (psbt: string, inputs: WalletSignInput[], autoFinalized?: boolean) => Promise<string>
@@ -90,7 +92,7 @@ export function LoanDesk(props: Props) {
         const acceptance = parseJson<BorrowerAcceptance>(input, 'Alice 接受申请')
         if (acceptance.version !== 1 || !acceptance.terms || !acceptance.transferUtxo || !acceptance.feeUtxo) throw new Error('接受申请格式不正确')
         if (!sameAddress(props.address, acceptance.terms.lenderAddress)) throw new Error('请切换到这份报价中的 Bob 钱包')
-        if (!props.apiKey) throw new Error('请先填写 UniSat OpenAPI Key')
+        if (!props.queryReady) throw new Error('请先填写 UniSat OpenAPI Key')
         const [utxos, transfers] = await Promise.all([
           fetchAvailableUtxos(props.address, props.apiKey),
           fetchTransferableInscriptions(acceptance.borrowerAddress, acceptance.terms.ticker, props.apiKey),
@@ -143,7 +145,7 @@ export function LoanDesk(props: Props) {
         const record = parseJson<ActiveLoanRecord>(input, '活动贷款记录')
         if (record.kind !== 'brc20-active-loan') throw new Error('这不是活动贷款记录')
         if (!sameAddress(props.address, record.borrowerAddress)) throw new Error('请切换到这笔贷款中的 Alice 钱包')
-        if (!props.apiKey) throw new Error('请先填写 UniSat OpenAPI Key')
+        if (!props.queryReady) throw new Error('请先填写 UniSat OpenAPI Key')
         const utxos = await fetchAvailableUtxos(props.address, props.apiKey)
         const draft = buildRepaymentDraft(record, utxos, 1)
         const psbt = await props.signPsbt(draft.psbt, draft.borrowerInputs, false)
@@ -166,7 +168,7 @@ export function LoanDesk(props: Props) {
         const record = parseJson<ActiveLoanRecord>(input, '活动贷款记录')
         if (record.kind !== 'brc20-active-loan') throw new Error('这不是活动贷款记录')
         if (!sameAddress(props.address, record.terms.lenderAddress)) throw new Error('请切换到这笔贷款中的 Bob 钱包')
-        if (!props.apiKey) throw new Error('请先填写 UniSat OpenAPI Key')
+        if (!props.queryReady) throw new Error('请先填写 UniSat OpenAPI Key')
         const utxos = await fetchAvailableUtxos(props.address, props.apiKey)
         const claim = buildDefaultClaim(record, utxos, 1)
         const signedPsbt = await props.signPsbt(claim.psbt, claim.lenderInputs, true)
@@ -199,7 +201,7 @@ export function LoanDesk(props: Props) {
       <p className="lead">粘贴完整的“{selected.input}”。页面会核对当前钱包角色，再构造或签署下一步。</p>
       <div className="callout warning"><b>Testnet4 实盘验证状态</b><p>交易协议和签名路径已经通过自动化测试；这一版尚未完成两只真实 UniSat 钱包的整套广播验收。请只使用测试币，并逐项核对钱包弹窗。</p></div>
       {riskNotes[task] && <div className="callout warning"><b>这一步会发生什么</b><p>{riskNotes[task]}</p></div>}
-      {!props.apiKey && ['bob-build', 'alice-repay', 'bob-default'].includes(task) && <label className="desk-key">UniSat OpenAPI Key<input type="password" value={props.manualApiKey} onChange={(event) => props.setManualApiKey(event.target.value)} placeholder="本地测试临时 Key" /></label>}
+      {props.showManualApiKey && ['bob-build', 'alice-repay', 'bob-default'].includes(task) && <label className="desk-key">UniSat OpenAPI Key<input type="password" value={props.manualApiKey} onChange={(event) => props.setManualApiKey(event.target.value)} placeholder="本地测试临时 Key" /></label>}
       <textarea className="paste-area" value={input} onChange={(event) => setInput(event.target.value)} placeholder={`粘贴${selected.input} JSON…`} />
       <div className="actions"><button className="primary large" disabled={busy || !input.trim()} onClick={run}>{busy ? '正在处理，请查看钱包…' : runLabels[task]}</button></div>
       {notice && <div className={output ? 'callout success' : 'callout danger'}><b>{output ? '已完成' : '暂时无法继续'}</b><p>{notice}</p></div>}

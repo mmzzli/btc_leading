@@ -40,3 +40,15 @@ npm run build
 - [早期 Runes TRD（归档参考）](docs/ASSET-LENDING-TRD.zh-CN.md)
 
 > 页面中的放款、还款和违约领取会广播真实 Testnet4 交易。签名前必须在 UniSat 中核对资产、金额和地址；测试网资产没有市场价值。
+
+## 部署到 Vercel
+
+导入 GitHub 仓库后使用以下配置：
+
+- Framework Preset：`Vite`
+- Root Directory：`./`
+- Build Command：`npm run build`
+- Output Directory：`dist`
+- Install Command：`npm install`
+
+在 Environment Variables 添加 `UNISAT_OPENAPI_KEY`，Value 填 UniSat Testnet4 OpenAPI Key，并应用到 Production 和 Preview。不要使用 `VITE_UNISAT_OPENAPI_KEY`，因为 `VITE_` 变量会公开在浏览器代码中。

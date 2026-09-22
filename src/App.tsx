@@ -103,6 +103,8 @@ function App() {
     ? balances.find((item) => item.ticker.toLowerCase() === importedOffer.terms.ticker.toLowerCase())
     : undefined, [balances, importedOffer])
   const apiKey = (import.meta.env.VITE_UNISAT_OPENAPI_KEY ?? manualApiKey).trim()
+  const usingServerProxy = import.meta.env.PROD && !apiKey
+  const assetServiceReady = Boolean(apiKey) || usingServerProxy
   const requiredCollateral = Number(importedOffer?.terms.collateralAmount ?? 0)
   const overallCollateral = Number(selectedBalance?.overallBalance ?? 0)
   const hasEnoughCollateral = overallCollateral >= requiredCollateral
@@ -239,7 +241,7 @@ function App() {
     setBusy(true)
     setNotice('')
     try {
-      if (!apiKey) throw new Error('请先填写 UniSat OpenAPI Key')
+      if (!assetServiceReady) throw new Error('请先填写 UniSat OpenAPI Key')
       const outpoint = outpointFromTransfer(exactTransfer)
       const [transferUtxo, feeUtxos] = await Promise.all([
         fetchUtxo(outpoint.txid, outpoint.vout, apiKey),
@@ -390,7 +392,7 @@ function App() {
                 <span className="step-tag">第 4 步</span><h1>检查你的 {importedOffer.terms.ticker} 抵押品</h1>
                 <p className="lead">系统需要区分可用余额和已经制作好的 Transfer 铭文。</p>
                 <Guide action="点击检查。这里只读取公开链上数据，不会让钱包签名。" result={`确认你能否准备 ${importedOffer.terms.collateralAmount} ${importedOffer.terms.ticker} 的抵押凭证。`} />
-                {!import.meta.env.VITE_UNISAT_OPENAPI_KEY && !balances && (
+                {!import.meta.env.PROD && !import.meta.env.VITE_UNISAT_OPENAPI_KEY && !balances && (
                   <div className="api-setup">
                     <div><span className="setup-number">1</span><p><b>领取免费的查询 Key</b>打开 UniSat Developer Center，注册或登录后创建 Free Plan API Key。</p></div>
                     <a className="external-button" href="https://developer.unisat.io" target="_blank" rel="noreferrer">打开 UniSat Developer Center ↗</a>
@@ -402,7 +404,7 @@ function App() {
                     </details>
                   </div>
                 )}
-                {!balances && <button className="primary large centered" disabled={busy || !apiKey} onClick={checkBalances}>{busy ? '正在查询…' : apiKey ? '使用这个 Key 检查资产' : '请先填写 API Key'}</button>}
+                {!balances && <button className="primary large centered" disabled={busy || !assetServiceReady} onClick={checkBalances}>{busy ? '正在查询…' : usingServerProxy ? '使用平台服务检查资产' : apiKey ? '使用这个 Key 检查资产' : '请先填写 API Key'}</button>}
                 {balances && (
                   <>
                     <div className="balance-grid">
@@ -460,7 +462,7 @@ function App() {
               <>
                 <span className="step-tag">完整流程</span><h1>贷款工作台</h1>
                 <p className="lead">双方通过可复制的交易包交接。每个钱包只签属于自己的输入，签名前都能在 UniSat 中检查。</p>
-                <LoanDesk address={wallet.wallet.address} apiKey={apiKey} manualApiKey={manualApiKey} setManualApiKey={setManualApiKey} signPsbt={wallet.signPsbt} pushPsbt={wallet.pushPsbt} />
+                <LoanDesk address={wallet.wallet.address} apiKey={apiKey} queryReady={assetServiceReady} showManualApiKey={!import.meta.env.PROD && !apiKey} manualApiKey={manualApiKey} setManualApiKey={setManualApiKey} signPsbt={wallet.signPsbt} pushPsbt={wallet.pushPsbt} />
               </>
             )}
           </section>
